@@ -1,0 +1,6 @@
+.*
+*.swp
+*~
+*.log
+target
+/project/metals.sbt
