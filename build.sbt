@@ -37,7 +37,7 @@ inThisBuild(
   Seq(
     crossScalaVersions := Seq("2.13.2", "2.12.11"),
     scalaVersion := crossScalaVersions.value.head,
-    scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked" /*, "-Xfatal-warnings"*/ )
+    scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xfatal-warnings")
   )
 )
 
