@@ -59,5 +59,5 @@ trait SagerMacroUtils {
   }
 
   protected def isConcreteLabelType(labelType: Type): Boolean =
-    labelType.typeSymbol.isClass && labelType.typeArgs.isEmpty
+    labelType.typeSymbol.isClass && labelType.typeArgs.forall(isConcreteLabelType)
 }
