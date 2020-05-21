@@ -5,7 +5,7 @@ import _root_.zio.internal.Platform
 
 package object zio {
   type Haz[A] = Field[A, A]
-  type Env[A, B <: A] = Field[A, B]
+  type Env[A, +B <: A] = Field[A, B]
   type FoundService[A, R <: Record] = Record.FoundValue[A, A, R]
   type FoundSubService[A, R <: Record] = Record.FoundSub[A, A, R]
   type SEnv = clock.Clock with console.Console with system.System with random.Random with blocking.Blocking
