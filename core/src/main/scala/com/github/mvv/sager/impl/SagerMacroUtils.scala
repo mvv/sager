@@ -13,7 +13,7 @@ trait SagerMacroUtils {
 
   private def flattenRefinedTypes(tpe: c.Type): Seq[Type] =
     tpe match {
-      case RefinedType(parents, _) => parents.flatMap(flattenRefinedTypes)
+      case RefinedType(parents, _) => parents.flatMap(parent => flattenRefinedTypes(parent.dealias))
       case _                       => Seq(tpe)
     }
 

@@ -1,10 +1,9 @@
 package com.github.mvv.sager.test
 
 import com.github.mvv.sager.{Field, Record}
-import org.specs2.matcher.TypecheckMatchers
 import org.specs2.mutable.Specification
 
-class RecordSpec extends Specification with TypecheckMatchers {
+class RecordSpec extends Specification {
   "Record" >> {
     "add non-existent field" >> {
       val r = Field[Int]("a").add[Long](true).add[String](0.0)
