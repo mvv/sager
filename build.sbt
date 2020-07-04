@@ -88,6 +88,6 @@ lazy val zio = (project in file("zio"))
   .settings(
     name := "sager-zio",
     description := "Generic records as ZIO environments",
-    libraryDependencies ++= Seq("dev.zio" %% "zio" % "1.0.0-RC19-2" % Provided, specs2 % Test)
+    libraryDependencies ++= Seq("dev.zio" %% "zio" % "1.0.0-RC21-2" % Provided, specs2 % Test)
   )
   .dependsOn(core)
