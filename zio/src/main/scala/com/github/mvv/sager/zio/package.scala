@@ -6,6 +6,8 @@ import _root_.zio.internal.Platform
 package object zio {
   type Haz[A] = Field[A, A]
   type Env[A, +B <: A] = Field[A, B]
+  type UsesService[A, R <: Record] = Record.FindSupValue[A, A, R]
+  type UsesServiceEnv[A, -B <: A, R <: Record] = Record.FindSupValue[A, B, R]
   type FoundService[A, R <: Record] = Record.FoundValue[A, A, R]
   type FoundSubService[A, R <: Record] = Record.FoundSub[A, A, R]
   type SEnv = clock.Clock with console.Console with system.System with random.Random with blocking.Blocking

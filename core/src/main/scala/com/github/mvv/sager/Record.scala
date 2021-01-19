@@ -60,6 +60,8 @@ object Record {
     type Rest >: R <: Record
     implicit val restContainsNot: NotFound[L, Rest]
     implicit val reconstructWitness: Field[L, Value] with Rest =:= R
+    // For Scala 2.12, where =:= is NOT a subtype of <:<
+    val reconstructRelaxedWitness: Field[L, Value] with Rest <:< R
   }
   object Found {
     implicit def found[L, R <: Record](implicit witness: R <:< Field[L, Any]): Found[L, R] =
@@ -76,9 +78,10 @@ object Record {
   object FoundValue extends FoundValueLow {
     private val singleton: FoundValue[Any, Any, Field[Any, Any]] = new FoundValue[Any, Any, Field[Any, Any]] {
       override type Rest = Record
-      implicit override val reconstructWitness: Field[Any, Any] with Record =:= Field[Any, Any] = implicitly
-      implicit override val valueWitness: Field[Any, Any] <:< Field[Any, Any] = implicitly
-      implicit override val restContainsNot: NotFound[Any, Record] = implicitly
+      override val reconstructWitness: Field[Any, Any] with Record =:= Field[Any, Any] = implicitly
+      override val reconstructRelaxedWitness: Field[Any, Any] with Record <:< Field[Any, Any] = implicitly
+      override val valueWitness: Field[Any, Any] <:< Field[Any, Any] = implicitly
+      override val restContainsNot: NotFound[Any, Record] = implicitly
     }
     def make[L, V, R <: Record, RS >: R <: Record](
         implicit constructWitness: Field[L, V] with RS =:= R,
@@ -100,24 +103,40 @@ object Record {
     implicit def restContainsNot: NotFound[L, Rest]
   }
   sealed trait FindLow {
-    private val notFoundCaseSingleton: Find.NotFoundCase[Any, Record] =
-      Find.NotFoundCase(NotFound.unsafeMake[Any, Record])
     implicit def notFoundCase[L, R <: Record](implicit notFound: NotFound[L, R]): Find[L, R] { type Rest = R } =
-      notFoundCaseSingleton.asInstanceOf[Find[L, R] { type Rest = R }]
+      FindSupValue.notFoundCase[L, R]
   }
   object Find extends FindLow {
-    final case class NotFoundCase[L, R <: Record](notFound: NotFound[L, R]) extends Find[L, R] {
+    final case class NotFoundCase[L, R <: Record](notFound: NotFound[L, R]) extends FindSupValue[L, Any, R] {
       override type Rest = R
-      implicit override def restContainsNot: NotFound[L, Rest] = notFound
+      override def restContainsNot: NotFound[L, Rest] = notFound
+      override def reconstructWitness: Field[L, Any] with R <:< R = implicitly
     }
-    final case class FoundCase[L, R <: Record](found: Found[L, R]) extends Find[L, R] {
+    final case class FoundCase[L, V, R <: Record](found: FoundValue[L, V, R]) extends FindSupValue[L, V, R] {
       override type Rest = found.Rest
-      implicit override def restContainsNot: NotFound[L, found.Rest] = found.restContainsNot
+      override def restContainsNot: NotFound[L, found.Rest] = found.restContainsNot
+      override def reconstructWitness: Field[L, V] with found.Rest <:< R = found.reconstructRelaxedWitness
     }
-    private val foundCaseSingleton: FoundCase[Any, Field[Any, Any]] =
-      FoundCase[Any, Field[Any, Any]](FoundValue.make[Any, Any, Field[Any, Any], Record])
     implicit def foundCase[L, R <: Record](implicit found: Found[L, R]): Find[L, R] { type Rest = found.Rest } =
-      foundCaseSingleton.asInstanceOf[Find[L, R] { type Rest = found.Rest }]
+      FindSupValue.foundCase[L, R]
+  }
+
+  sealed trait FindSupValue[L, -V, R <: Record] extends Find[L, R] {
+    implicit def reconstructWitness: Field[L, V] with Rest <:< R
+  }
+  sealed trait FindSupValueLow {
+    private val notFoundCaseSingleton: Find.NotFoundCase[Any, Record] =
+      Find.NotFoundCase(NotFound.unsafeMake[Any, Record])
+    implicit def notFoundCase[L, R <: Record](
+        implicit notFound: NotFound[L, R]): FindSupValue[L, Any, R] { type Rest = R } =
+      notFoundCaseSingleton.asInstanceOf[FindSupValue[L, Any, R] { type Rest = R }]
+  }
+  object FindSupValue extends FindSupValueLow {
+    private val foundCaseSingleton: Find.FoundCase[Any, Any, Field[Any, Any]] =
+      Find.FoundCase[Any, Any, Field[Any, Any]](FoundValue.make[Any, Any, Field[Any, Any], Record])
+    implicit def foundCase[L, R <: Record](
+        implicit found: Found[L, R]): FindSupValue[L, found.Value, R] { type Rest = found.Rest } =
+      foundCaseSingleton.asInstanceOf[FindSupValue[L, found.Value, R] { type Rest = found.Rest }]
   }
 
   final class AddSyntax[L, R <: Record](val record: R) extends AnyVal {
