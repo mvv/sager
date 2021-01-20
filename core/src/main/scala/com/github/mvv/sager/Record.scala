@@ -59,6 +59,7 @@ object Record {
   sealed trait Found[L, R <: Record] extends Select[L, R] {
     type Rest >: R <: Record
     implicit val restContainsNot: NotFound[L, Rest]
+    implicit def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): Rest <:< S
     implicit val reconstructWitness: Field[L, Value] with Rest =:= R
     // For Scala 2.12, where =:= is NOT a subtype of <:<
     val reconstructRelaxedWitness: Field[L, Value] with Rest <:< R
@@ -82,6 +83,8 @@ object Record {
       override val reconstructRelaxedWitness: Field[Any, Any] with Record <:< Field[Any, Any] = implicitly
       override val valueWitness: Field[Any, Any] <:< Field[Any, Any] = implicitly
       override val restContainsNot: NotFound[Any, Record] = implicitly
+      override def restContains[S >: Field[Any, Any] <: Record](implicit notFound: NotFound[Any, S]): Record <:< S =
+        implicitly[Any <:< Any].asInstanceOf[Record <:< S]
     }
     def make[L, V, R <: Record, RS >: R <: Record](
         implicit constructWitness: Field[L, V] with RS =:= R,
@@ -101,6 +104,7 @@ object Record {
   sealed trait Find[L, R <: Record] { self =>
     type Rest >: R <: Record
     implicit def restContainsNot: NotFound[L, Rest]
+    implicit def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): Rest <:< S
   }
   sealed trait FindLow {
     implicit def notFoundCase[L, R <: Record](implicit notFound: NotFound[L, R]): Find[L, R] { type Rest = R } =
@@ -110,11 +114,14 @@ object Record {
     final case class NotFoundCase[L, R <: Record](notFound: NotFound[L, R]) extends FindSupValue[L, Any, R] {
       override type Rest = R
       override def restContainsNot: NotFound[L, Rest] = notFound
+      override def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): Rest <:< S = implicitly
       override def reconstructWitness: Field[L, Any] with R <:< R = implicitly
     }
     final case class FoundCase[L, V, R <: Record](found: FoundValue[L, V, R]) extends FindSupValue[L, V, R] {
       override type Rest = found.Rest
       override def restContainsNot: NotFound[L, found.Rest] = found.restContainsNot
+      override def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): found.Rest <:< S =
+        found.restContains[S](notFound)
       override def reconstructWitness: Field[L, V] with found.Rest <:< R = found.reconstructRelaxedWitness
     }
     implicit def foundCase[L, R <: Record](implicit found: Found[L, R]): Find[L, R] { type Rest = found.Rest } =
