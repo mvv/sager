@@ -13,7 +13,7 @@ class SagerBlackBoxMacros(val c: blackbox.Context) extends SagerMacroUtils {
 
     val (fields, rest) = deconstructRecordType(recordType)
     val dealiasedLabelType = labelType.dealias
-    if (fields.contains(dealiasedLabelType)) {
+    if (fields.keys.exists(_ =:= dealiasedLabelType)) {
       c.error(c.enclosingPosition, s"record $recordType contains a field with label $labelType")
     } else if (!isConcreteLabelType(dealiasedLabelType)) {
       fields.keys.headOption.foreach { otherLabelType =>

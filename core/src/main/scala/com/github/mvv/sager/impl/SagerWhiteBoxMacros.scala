@@ -26,7 +26,7 @@ class SagerWhiteBoxMacros(val c: whitebox.Context) extends SagerMacroUtils {
     val recordType = weakTypeTag[R].tpe
     val (fields, rest0) = deconstructRecordType(recordType)
     val dealiasedLabelType = labelType.dealias
-    fields.get(dealiasedLabelType) match {
+    fields.get(dealiasedLabelType).orElse(fields.find(_._1 =:= dealiasedLabelType).map(_._2)) match {
       case Some(valueType) =>
         val restTree = fields.foldLeft(Right(rest0): Either[Tree, Type]) {
           case (rest, (fieldLabelType, _)) if fieldLabelType == labelType =>
