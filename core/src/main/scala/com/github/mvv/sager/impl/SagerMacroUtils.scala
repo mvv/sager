@@ -30,7 +30,7 @@ trait SagerMacroUtils {
              None
            }) match {
             case Some((labelType, valueType)) =>
-              val updatedType = fields.get(labelType) match {
+              val updatedType = fields.get(labelType).orElse(fields.find(_._1 =:= labelType).map(_._2)) match {
                 case None                      => Right(valueType)
                 case Some(Right(existingType)) => Left(tq"$existingType with $valueType")
                 case Some(Left(existingTree))  => Left(tq"$existingTree with $valueType")

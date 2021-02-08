@@ -29,7 +29,7 @@ class SagerWhiteBoxMacros(val c: whitebox.Context) extends SagerMacroUtils {
     fields.get(dealiasedLabelType).orElse(fields.find(_._1 =:= dealiasedLabelType).map(_._2)) match {
       case Some(valueType) =>
         val restTree = fields.foldLeft(Right(rest0): Either[Tree, Type]) {
-          case (rest, (fieldLabelType, _)) if fieldLabelType == labelType =>
+          case (rest, (fieldLabelType, _)) if fieldLabelType =:= dealiasedLabelType =>
             rest
           case (rest, (fieldLabelType, fieldValueType)) =>
             rest match {
