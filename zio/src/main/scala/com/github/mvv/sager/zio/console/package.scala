@@ -2,7 +2,7 @@ package com.github.mvv.sager.zio
 
 import java.io.IOException
 
-import _root_.zio.{ULayer, URIO, URLayer, ZIO, ZLayer, console => zioConsole}
+import _root_.zio.{ULayer, URLayer, ZIO, ZLayer, console => zioConsole}
 
 package object console {
   type Console = Haz[zioConsole.Console.Service]
@@ -14,10 +14,10 @@ package object console {
     val live: ULayer[Console] = ZLayer.succeedHaz(Console.Service.live)
   }
 
-  def putStr(line: => String): URIO[Console, Unit] =
-    URIO.accessM(_.value.putStr(line))
-  def putStrLn(line: => String): URIO[Console, Unit] =
-    URIO.accessM(_.value.putStrLn(line))
+  def putStr(line: => String): ZIO[Console, IOException, Unit] =
+    ZIO.accessM(_.value.putStr(line))
+  def putStrLn(line: => String): ZIO[Console, IOException, Unit] =
+    ZIO.accessM(_.value.putStrLn(line))
   val getStrLn: ZIO[Console, IOException, String] =
     ZIO.accessM(_.value.getStrLn)
 }

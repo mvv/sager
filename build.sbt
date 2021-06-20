@@ -5,7 +5,7 @@ import xerial.sbt.Sonatype._
 inThisBuild(
   Seq(
     organization := "com.github.mvv.sager",
-    version := "0.1-M9", // next is M10
+    version := "0.1-M10", // next is M11
     homepage := Some(url("https://github.com/mvv/sager")),
     scmInfo := Some(ScmInfo(url("https://github.com/mvv/sager"), "scm:git@github.com:mvv/sager.git")),
     licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
@@ -35,7 +35,7 @@ lazy val sonatypeBundleReleaseIfNotSnapshot: Command = Command.command("sonatype
 
 inThisBuild(
   Seq(
-    crossScalaVersions := Seq("2.13.2", "2.12.11"),
+    crossScalaVersions := Seq("2.13.6", "2.12.14"),
     scalaVersion := crossScalaVersions.value.head,
     scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xfatal-warnings")
   )
@@ -47,7 +47,7 @@ def isPriorTo2_13(version: String): Boolean =
     case _                => false
   }
 
-val specs2Version = "4.9.4"
+val specs2Version = "4.12.1"
 val specs2 = "org.specs2" %% "specs2-core" % specs2Version
 
 lazy val sager = (project in file("."))
@@ -71,7 +71,7 @@ lazy val core = (project in file("core"))
       }
     },
     libraryDependencies ++= Seq(
-      "dev.zio" %% "izumi-reflect" % "1.0.0-M2",
+      "dev.zio" %% "izumi-reflect" % "1.1.2",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
       specs2 % Test
     ),
@@ -88,6 +88,6 @@ lazy val zio = (project in file("zio"))
   .settings(
     name := "sager-zio",
     description := "Generic records as ZIO environments",
-    libraryDependencies ++= Seq("dev.zio" %% "zio" % "1.0.0-RC21-2" % Provided, specs2 % Test)
+    libraryDependencies ++= Seq("dev.zio" %% "zio" % "1.0.9" % Provided, specs2 % Test)
   )
   .dependsOn(core)
