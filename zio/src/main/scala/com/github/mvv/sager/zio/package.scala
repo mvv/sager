@@ -30,6 +30,10 @@ package object zio {
     override val environment: SEnv = SEnv.Services.live
     override val platform: Platform = Platform.default
   }
+  object SagerRuntime {
+    lazy val default = Runtime(SEnv.Services.live, Platform.default)
+    lazy val global = Runtime(SEnv.Services.live, Platform.global)
+  }
 
   trait SagerApp extends SagerRuntime {
     def run(args: List[String]): URIO[SEnv, Int]
