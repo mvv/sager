@@ -1,8 +1,8 @@
 package com.github.mvv.sager.zio
 
 import java.io.IOException
-
-import _root_.zio.{RIO, UIO, ULayer, URLayer, ZIO, ZLayer, blocking => zioBlocking}
+import _root_.zio.{RIO, UIO, ULayer, URIO, URLayer, ZIO, ZLayer, blocking => zioBlocking}
+import _root_.zio.internal.Executor
 
 package object blocking {
   type Blocking = Haz[zioBlocking.Blocking.Service]
@@ -16,12 +16,14 @@ package object blocking {
 
   def blocking[R <: Blocking, E, A](zio: ZIO[R, E, A]): ZIO[R, E, A] =
     ZIO.accessM[R](_.value.blocking(zio))
+  def blockingExecutor: URIO[Blocking, Executor] =
+    URIO.access(_.value.blockingExecutor)
   def effectBlocking[A](effect: => A): RIO[Blocking, A] =
-    RIO.accessM[Blocking](_.value.effectBlocking(effect))
+    RIO.accessM(_.value.effectBlocking(effect))
   def effectBlockingCancelable[A](effect: => A)(cancel: UIO[Unit]): RIO[Blocking, A] =
-    ZIO.accessM[Blocking](_.value.effectBlockingCancelable(effect)(cancel))
-  def effectBlockingIO[A](effect: => A): ZIO[Blocking, IOException, A] =
-    effectBlocking(effect).refineToOrDie[IOException]
+    RIO.accessM(_.value.effectBlockingCancelable(effect)(cancel))
   def effectBlockingInterrupt[A](effect: => A): RIO[Blocking, A] =
     RIO.accessM(_.value.effectBlockingInterrupt(effect))
+  def effectBlockingIO[A](effect: => A): ZIO[Blocking, IOException, A] =
+    effectBlocking(effect).refineToOrDie[IOException]
 }

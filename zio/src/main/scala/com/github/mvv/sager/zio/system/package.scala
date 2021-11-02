@@ -20,6 +20,8 @@ package object system {
     ZIO.accessM(_.value.envOrOption(variable, alt))
   val envs: ZIO[System, SecurityException, Map[String, String]] =
     ZIO.accessM(_.value.envs)
+  val properties: RIO[System, Map[String, String]] =
+    RIO.accessM(_.value.properties)
   def property(prop: => String): RIO[System, Option[String]] =
     RIO.accessM(_.value.property(prop))
   def propertyOrElse(prop: String, alt: => String): RIO[System, String] =

@@ -2,6 +2,8 @@ package com.github.mvv.sager.zio
 
 import _root_.zio.{Chunk, ULayer, URIO, URLayer, ZLayer, random => zioRandom}
 
+import java.util.UUID
+
 package object random {
   type Random = Haz[zioRandom.Random.Service]
   type RandomEnv[A <: zioRandom.Random.Service] = Env[zioRandom.Random.Service, A]
@@ -38,6 +40,8 @@ package object random {
     URIO.accessM(_.value.nextLongBetween(minInclusive, maxExclusive))
   def nextLongBounded(n: => Long): URIO[Random, Long] =
     URIO.accessM(_.value.nextLongBounded(n))
+  val nextUUID: URIO[Random, UUID] =
+    URIO.accessM(_.value.nextUUID)
   val nextPrintableChar: URIO[Random, Char] =
     URIO.accessM(_.value.nextPrintableChar)
   def nextString(length: => Int): URIO[Random, String] =

@@ -16,8 +16,12 @@ package object console {
 
   def putStr(line: => String): ZIO[Console, IOException, Unit] =
     ZIO.accessM(_.value.putStr(line))
+  def putStrErr(line: => String): ZIO[Console, IOException, Unit] =
+    ZIO.accessM(_.value.putStrErr(line))
   def putStrLn(line: => String): ZIO[Console, IOException, Unit] =
     ZIO.accessM(_.value.putStrLn(line))
+  def putStrLnErr(line: => String): ZIO[Console, IOException, Unit] =
+    ZIO.accessM(_.value.putStrLnErr(line))
   val getStrLn: ZIO[Console, IOException, String] =
     ZIO.accessM(_.value.getStrLn)
 }

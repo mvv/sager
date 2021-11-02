@@ -20,8 +20,10 @@ package object clock {
     URIO.accessM(_.value.currentTime(unit))
   val currentDateTime: ZIO[Clock, DateTimeException, OffsetDateTime] =
     ZIO.accessM(_.value.currentDateTime)
+  val instant: URIO[Clock, java.time.Instant] =
+    URIO.accessM(_.value.instant)
   val nanoTime: URIO[Clock, Long] =
-    ZIO.accessM(_.value.nanoTime)
+    URIO.accessM(_.value.nanoTime)
   def sleep(duration: => Duration): URIO[Clock, Unit] =
-    ZIO.accessM(_.value.sleep(duration))
+    URIO.accessM(_.value.sleep(duration))
 }
