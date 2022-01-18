@@ -43,9 +43,12 @@ package object zio {
           (for {
             fiber <- run(args.toList).fork
             _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
-              override def run(): Unit = {
-                val _ = unsafeRunSync(fiber.interrupt)
-              }
+              override def run(): Unit =
+                if (_root_.zio.expose.hadFatalError()) {
+                  System.err.println("Fatal error, not interrupting the main Fiber")
+                } else {
+                  val _ = unsafeRunSync(fiber.interrupt)
+                }
             }))
             result <- fiber.join
             _ <- fiber.interrupt
