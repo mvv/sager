@@ -3,7 +3,7 @@ package com.github.mvv.sager.zio
 import java.time.{DateTimeException, OffsetDateTime}
 import java.util.concurrent.TimeUnit
 
-import _root_.zio.{ULayer, URIO, URLayer, ZIO, ZLayer, clock => zioClock}
+import _root_.zio.{clock => zioClock, ULayer, URIO, URLayer, ZIO, ZLayer}
 import _root_.zio.duration.Duration
 
 package object clock {

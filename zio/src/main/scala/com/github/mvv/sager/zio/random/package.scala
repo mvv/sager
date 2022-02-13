@@ -1,6 +1,6 @@
 package com.github.mvv.sager.zio
 
-import _root_.zio.{Chunk, ULayer, URIO, URLayer, ZLayer, random => zioRandom}
+import _root_.zio.{random => zioRandom, Chunk, ULayer, URIO, URLayer, ZLayer}
 
 import java.util.UUID
 

@@ -15,17 +15,17 @@ import cats.effect.kernel.{
   Concurrent,
   Cont,
   Deferred,
+  Fiber => CFiber,
   GenConcurrent,
   GenTemporal,
   Outcome,
   Poll,
+  Ref => CRef,
   Sync,
   Temporal,
-  Unique,
-  Fiber => CFiber,
-  Ref => CRef
+  Unique
 }
-import cats.effect.{LiftIO, IO => CIO}
+import cats.effect.{IO => CIO, LiftIO}
 import cats.effect.unsafe.IORuntime
 import com.github.mvv.sager.zio.blocking.{effectBlocking, effectBlockingInterrupt, Blocking}
 import com.github.mvv.sager.zio.clock.{currentTime, nanoTime, Clock}
@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, NANOSECONDS}
 import scala.concurrent.{ExecutionContext, Future}
 
-package object catz extends SagerCatsEffectPlatform {
+object catz extends SagerCatsEffectPlatform {
   object core extends CatsPlatform
   object mtl extends CatsMtlPlatform
 

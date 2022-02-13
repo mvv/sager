@@ -4,14 +4,15 @@ import com.github.mvv.sager.zio.FoundService
 import com.github.mvv.sager.zio.blocking.Blocking
 import com.github.mvv.sager.zio.clock.Clock
 import com.github.mvv.sager.zio.console.Console
-import org.specs2.mutable.Specification
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.must.Matchers._
 
-class ZioSpec extends Specification {
+class ZioSpec extends AnyFunSpec {
   import ZioSpec._
 
-  "ZIO service" >> {
-    "found in environment" >> {
-      implicitly[FoundService[Clock.Service, Environment]] must not(throwA[Throwable])
+  describe("ZIO service") {
+    it("found in environment") {
+      noException must be thrownBy implicitly[FoundService[Clock.Service, Environment]]
     }
   }
 }

@@ -1,7 +1,7 @@
 package com.github.mvv.sager.zio
 
 import java.io.IOException
-import _root_.zio.{RIO, UIO, ULayer, URIO, URLayer, ZIO, ZLayer, blocking => zioBlocking}
+import _root_.zio.{blocking => zioBlocking, RIO, UIO, ULayer, URIO, URLayer, ZIO, ZLayer}
 import _root_.zio.internal.Executor
 
 package object blocking {

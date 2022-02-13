@@ -2,7 +2,7 @@ package com.github.mvv.sager.zio
 
 import java.io.IOException
 
-import _root_.zio.{ULayer, URLayer, ZIO, ZLayer, console => zioConsole}
+import _root_.zio.{console => zioConsole, ULayer, URLayer, ZIO, ZLayer}
 
 package object console {
   type Console = Haz[zioConsole.Console.Service]

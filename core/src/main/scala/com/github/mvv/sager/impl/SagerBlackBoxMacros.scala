@@ -1,6 +1,7 @@
 package com.github.mvv.sager.impl
 
 import com.github.mvv.sager.Record
+import com.github.mvv.typine.impl.TypineMacros
 
 import scala.reflect.macros.blackbox
 
@@ -10,33 +11,35 @@ class SagerBlackBoxMacros(val c: blackbox.Context) extends SagerMacroUtils {
   def notFound[L: WeakTypeTag, R <: Record: WeakTypeTag]: Tree = {
     val labelType = weakTypeTag[L].tpe
     val recordType = weakTypeTag[R].tpe
+    System.err.println(s"NOT_FOUND $labelType $recordType")
 
     val (fields, rest) = deconstructRecordType(recordType)
-    val dealiasedLabelType = labelType.dealias
-    if (fields.keys.exists(_ =:= dealiasedLabelType)) {
-      c.error(c.enclosingPosition, s"record $recordType contains a field with label $labelType")
-    } else if (!isConcreteLabelType(dealiasedLabelType)) {
-      fields.keys.headOption.foreach { otherLabelType =>
-        c.error(c.enclosingPosition, s"could not prove that label $labelType is not equal to $otherLabelType")
+    val (diffType, unknownType) =
+      fields.foldLeft((Option.empty[Either[Tree, Type]], rest.map(Right(_): Either[Tree, Type]))) {
+        case ((diffType, unknownType), (fieldLabelType, fieldValueType)) =>
+          val fieldType = createFieldType(fieldLabelType, fieldValueType)
+          if (TypineMacros.searchUnequal(c)(labelType, fieldLabelType) != EmptyTree) {
+            (withType(diffType, fieldType), unknownType)
+          } else {
+            (diffType, withType(unknownType, fieldType))
+          }
       }
-    } else {
-      fields.keys.find(!isConcreteLabelType(_)).foreach { abstractLabelType =>
-        c.error(c.enclosingPosition, s"could not prove that label $labelType is not equal to $abstractLabelType")
-      }
-    }
-    if (rest.typeSymbol == baseRecordType.typeSymbol) {
-      q"_root_.com.github.mvv.sager.Record.NotFound.unsafeMake[$labelType, $recordType]"
-    } else {
-      if (fields.isEmpty) {
-        c.error(c.enclosingPosition,
-                s"could not prove that a field with label $labelType is not a member of $recordType")
-      }
-      q"""
-         {
-           implicitly[_root_.com.github.mvv.sager.Record.NotFound[$labelType, $rest]]
-           _root_.com.github.mvv.sager.Record.NotFound.unsafeMake[$labelType, $recordType]
-         }
-       """
+    diffType.map(toType) match {
+      case Some(diffType) =>
+        val absentInDiff =
+          q"_root_.com.github.mvv.sager.Record.NotFound.unsafeMake[$labelType, $diffType]"
+        unknownType.map(toType) match {
+          case Some(unknownType) =>
+            q"""
+               _root_.com.github.mvv.sager.Record.NotFound.make[$labelType, $diffType, $unknownType](
+                 $absentInDiff,
+                 implicitly[_root_.com.github.mvv.sager.Record.NotFound[$labelType, $unknownType]])
+             """
+          case None =>
+            absentInDiff
+        }
+      case None =>
+        EmptyTree
     }
   }
 }

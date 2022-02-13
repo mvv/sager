@@ -5,7 +5,7 @@ import xerial.sbt.Sonatype._
 inThisBuild(
   Seq(
     organization := "com.github.mvv.sager",
-    version := "0.1-M13", // next is M14
+    version := "0.2-SNAPSHOT", // next is M1
     homepage := Some(url("https://github.com/mvv/sager")),
     scmInfo := Some(ScmInfo(url("https://github.com/mvv/sager"), "scm:git@github.com:mvv/sager.git")),
     licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
@@ -35,24 +35,35 @@ lazy val sonatypeBundleReleaseIfNotSnapshot: Command = Command.command("sonatype
 
 inThisBuild(
   Seq(
-    crossScalaVersions := Seq("2.13.7", "2.12.15"),
+    crossScalaVersions := Seq("3.0.2", "2.13.8"),
     scalaVersion := crossScalaVersions.value.head,
     scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xfatal-warnings")
   )
 )
 
-def isPriorTo2_13(version: String): Boolean =
+def isScala2(version: String): Boolean =
   CrossVersion.partialVersion(version) match {
-    case Some((2, minor)) => minor < 13
-    case _                => false
+    case Some((2, _)) => true
+    case _            => false
   }
 
-val specs2Version = "4.13.0"
-val specs2 = "org.specs2" %% "specs2-core" % specs2Version
+inThisBuild(
+  Seq(
+    scalacOptions ++= {
+      if (isScala2(scalaVersion.value)) {
+        Seq("-Xsource:3.0")
+      } else {
+        Nil
+      }
+    }
+  )
+)
+
+val scalatest = "org.scalatest" %% "scalatest" % "3.2.10"
 
 lazy val sager = (project in file("."))
   .settings(
-    skip in publish := true,
+    publish / skip := true,
     sonatypeProfileName := "com.github.mvv",
     sonatypeSessionName := s"Sager_${version.value}",
     commands += sonatypeBundleReleaseIfNotSnapshot
@@ -63,21 +74,35 @@ lazy val core = (project in file("core"))
   .settings(
     name := "sager",
     description := "Generic records for Scala",
-    scalacOptions ++= {
-      if (isPriorTo2_13(scalaVersion.value)) {
-        Nil
+    Compile / scalaSource := {
+      if (isScala2(scalaVersion.value)) {
+        (Compile / scalaSource).value
       } else {
+        baseDirectory.value / "src" / "main" / "scala3"
+      }
+    },
+    Test / scalaSource := {
+      if (isScala2(scalaVersion.value)) {
+        (Test / scalaSource).value
+      } else {
+        baseDirectory.value / "src" / "test" / "scala3"
+      }
+    },
+    scalacOptions ++= {
+      if (isScala2(scalaVersion.value)) {
         Seq("-Ymacro-annotations")
+      } else {
+        Nil
       }
     },
     libraryDependencies ++= Seq(
+      "com.github.mvv.typine" %% "typine" % "0.1-M4",
       "dev.zio" %% "izumi-reflect" % "1.1.3",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
-      specs2 % Test
+      scalatest % Test
     ),
     libraryDependencies ++= {
-      if (isPriorTo2_13(scalaVersion.value)) {
-        Seq(compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
+      if (isScala2(scalaVersion.value)) {
+        Seq("org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided)
       } else {
         Nil
       }
@@ -88,7 +113,7 @@ lazy val zio = (project in file("zio"))
   .settings(
     name := "sager-zio",
     description := "Generic records as ZIO environments",
-    libraryDependencies ++= Seq("dev.zio" %% "zio" % "1.0.12" % Provided, specs2 % Test)
+    libraryDependencies ++= Seq("dev.zio" %% "zio" % "1.0.12", scalatest % Test)
   )
   .dependsOn(core)
 
@@ -96,7 +121,20 @@ lazy val zioInteropCats = (project in file("zio-interop-cats"))
   .settings(
     name := "sager-zio-interop-cats",
     description := "Generic records as ZIO environments (Cats interop)",
-    addCompilerPlugin(("org.typelevel" % "kind-projector" % "0.13.2").cross(CrossVersion.full)),
-    libraryDependencies ++= Seq("dev.zio" %% "zio-interop-cats" % "3.1.1.0", specs2 % Test)
+    scalacOptions ++= {
+      if (isScala2(scalaVersion.value)) {
+        Nil
+      } else {
+        Seq("-Ykind-projector")
+      }
+    },
+    libraryDependencies ++= {
+      if (isScala2(scalaVersion.value)) {
+        Seq(compilerPlugin(("org.typelevel" % "kind-projector" % "0.13.2").cross(CrossVersion.full)))
+      } else {
+        Nil
+      }
+    },
+    libraryDependencies ++= Seq("dev.zio" %% "zio-interop-cats" % "3.1.1.0", scalatest % Test)
   )
   .dependsOn(zio)

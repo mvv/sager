@@ -1,9 +1,11 @@
 package com.github.mvv.sager
 
 import com.github.mvv.sager.impl.{SagerBlackBoxMacros, SagerWhiteBoxMacros}
+import com.github.mvv.typine.!:=
 import izumi.reflect.Tag
 import izumi.reflect.macrortti.LightTypeTag
 
+import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
 
 sealed trait Record extends Serializable
@@ -11,7 +13,7 @@ sealed trait Field[L, +V] extends Record
 
 object Field {
   implicit final class FieldSyntax[L, V](val underlying: Field[L, V]) extends AnyVal {
-    def value(implicit tag: Tag[L]): V = underlying.get[L](tag, Record.Select.make[L, V, Field[L, V]])
+    def value(implicit tag: Tag[L]): V = underlying.get[L](tag, Record.Present.make[L, V, Field[L, V]])
     def map[V1](f: V => V1)(implicit tag: Tag[L]): Field[L, V1] = Field[L](f(value))
   }
 
@@ -25,189 +27,160 @@ object Field {
 object Record {
   final private case class Impl(fields: Map[LightTypeTag, Any]) extends Field[Any, Any]
 
-  sealed trait Select[L, R <: Record] {
-    type Value
-    implicit val valueWitness: R <:< Field[L, Value]
+  @implicitNotFound("could not prove that record ${R} has field ${L}")
+  sealed trait Present[L, +V, -R <: Record] {
+    type Value <: V
+    implicit def valueWitness: R <:< Field[L, Value]
+    def exact: Present[L, Value, R]
   }
-  object Select {
-    private val singleton: Select[Any, Field[Any, Any]] = new Select[Any, Field[Any, Any]] {
+  object Present {
+    private val singleton: Present[Any, Any, Field[Any, Any]] = new Present[Any, Any, Field[Any, Any]] {
       override type Value = Any
       implicit override val valueWitness: Field[Any, Any] <:< Field[Any, Any] = implicitly
+      override def exact: Present[Any, Any, Field[Any, Any]] = this
+      override def toString: String = "Record.Present"
     }
-    def make[L, V, R <: Record](implicit witness: R <:< Field[L, V]): Select[L, R] { type Value = V } =
-      singleton.asInstanceOf[Select[L, R] { type Value = V }]
+    def make[L, V, R <: Record](implicit witness: R <:< Field[L, V]): Present[L, V, R] { type Value = V } =
+      singleton.asInstanceOf[Present[L, V, R] { type Value = V }]
     implicit def select[L, R <: Record](implicit witness: R <:< Field[L, Any]): Select[L, R] =
       macro SagerWhiteBoxMacros.select[L, R]
   }
 
-  sealed trait NotFound[L, R <: Record] {
-    def covary[S >: R <: Record]: NotFound[L, S]
+  type Select[L, -R <: Record] = Present[L, Any, R]
+
+  @implicitNotFound("could not prove that record ${R} does not have field ${L}")
+  sealed trait Absent[L, +R <: Record] {
+    implicit def distinct[L1](implicit present: Select[L1, R]): L !:= L1
   }
-  sealed trait NotFoundLow {
-    implicit def notFound[L, R <: Record]: NotFound[L, R] = macro SagerBlackBoxMacros.notFound[L, R]
+  sealed trait AbsentLowest {
+    implicit def absent[L, R <: Record]: Absent[L, R] = macro SagerBlackBoxMacros.notFound[L, R]
   }
-  object NotFound extends NotFoundLow {
-    private val singleton: NotFound[Any, Record] = new NotFound[Any, Record] {
-      def covary[S >: Record <: Record] = this
-    }
-    def unsafeMake[L, R <: Record]: NotFound[L, R] =
-      singleton.asInstanceOf[NotFound[L, R]]
-    def make[L, R1 <: Record, R2 <: Record](
-        implicit notFound1: NotFound[L, R1],
-        notFound2: NotFound[L, R2]): NotFound[L, R1 with R2] =
-      unsafeMake[L, R1 with R2]
-    implicit def emptyNotFound[L]: NotFound[L, Record] =
-      unsafeMake[L, Record]
+  sealed trait AbsentLow extends AbsentLowest {
+    implicit def distinct[L1, L2, V2](implicit witness: L1 !:= L2): Absent[L1, Field[L2, V2]] =
+      NotFound.distinct[L1, L2, V2]
+  }
+  object Absent extends AbsentLow {
+    implicit def empty[L]: Absent[L, Record] = NotFound.empty[L]
+    def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1], absent2: Absent[L, R2]): Absent[L, R1 with R2] =
+      NotFound.make[L, R1, R2](absent1, absent2)
   }
 
-  sealed trait Found[L, R <: Record] extends Select[L, R] {
-    type Rest >: R <: Record
-    implicit val restContainsNot: NotFound[L, Rest]
-    implicit def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): Rest <:< S
-    implicit def restFind[L1](implicit find1: Find[L1, R], notFound: NotFound[L, Field[L1, Any]]): Find[L1, Rest]
-    implicit def restFound[L1](
-        implicit found1: Found[L1, R],
-        notFound: NotFound[L, Field[L1, Any]]): Found[L1, Rest] { type Value = found1.Value }
-    implicit val reconstructWitness: Field[L, Value] with Rest =:= R
-    // For Scala 2.12, where =:= is NOT a subtype of <:<
-    val reconstructRelaxedWitness: Field[L, Value] with Rest <:< R
-  }
-  object Found {
-    implicit def found[L, R <: Record](implicit witness: R <:< Field[L, Any]): Found[L, R] =
-      macro SagerWhiteBoxMacros.found[L, R]
-  }
-
-  sealed trait FoundValue[L, V, R <: Record] extends Found[L, R] {
-    final type Value = V
-    implicit def restFindSupValue[L1, V1](
-        implicit find1: FindSupValue[L1, V1, R],
-        notFound: NotFound[L, Field[L1, Any]]): FindSupValue[L1, V1, Rest]
-    implicit final def restFoundValue[L1, V1](
-        implicit found1: FoundValue[L1, V1, R],
-        notFound: NotFound[L, Field[L1, Any]]): FoundValue[L1, V1, Rest] =
-      FoundValue.fromFound(restFound[L1])
-  }
-  sealed trait FoundValueLow {
-    implicit def foundValue[L, V, R <: Record](implicit witness: R <:< Field[L, V]): FoundValue[L, V, R] =
-      macro SagerWhiteBoxMacros.found[L, R]
-  }
-  object FoundValue extends FoundValueLow {
-    private val singleton: FoundValue[Any, Any, Field[Any, Any]] = new FoundValue[Any, Any, Field[Any, Any]] {
-      override type Rest = Record
-      override val reconstructWitness: Field[Any, Any] with Record =:= Field[Any, Any] = implicitly
-      override val reconstructRelaxedWitness: Field[Any, Any] with Record <:< Field[Any, Any] = implicitly
-      override val valueWitness: Field[Any, Any] <:< Field[Any, Any] = implicitly
-      override val restContainsNot: NotFound[Any, Record] = implicitly
-      override def restContains[S >: Field[Any, Any] <: Record](implicit notFound: NotFound[Any, S]): Record <:< S =
-        implicitly[Any <:< Any].asInstanceOf[Record <:< S]
-      override def restFind[L1](
-          implicit find1: Find[L1, Field[Any, Any]],
-          notFound: NotFound[Any, Field[L1, Any]]): Find[L1, Rest] =
-        find1.asInstanceOf[Find[L1, Rest]]
-      override def restFindSupValue[L1, V1](
-          implicit find1: FindSupValue[L1, V1, Field[Any, Any]],
-          notFound: NotFound[Any, Field[L1, Any]]): FindSupValue[L1, V1, Rest] =
-        find1.asInstanceOf[FindSupValue[L1, V1, Rest]]
-      override def restFound[L1](
-          implicit found1: Found[L1, Field[Any, Any]],
-          notFound: NotFound[Any, Field[L1, Any]]): FoundValue[L1, found1.Value, Rest] =
-        singleton.asInstanceOf[FoundValue[L1, found1.Value, Rest]]
-    }
-    def make[L, V, R <: Record, RS >: R <: Record](
-        implicit constructWitness: Field[L, V] with RS =:= R,
-        restContainsNot: NotFound[L, RS]): FoundValue[L, V, R] {
-      type Rest = RS
-    } =
-      singleton.asInstanceOf[FoundValue[L, V, R] { type Rest = RS }]
-    implicit def fromFound[L, V, R <: Record](implicit found1: Found[L, R]): FoundValue[L, found1.Value, R] {
-      type Rest = found1.Rest
-    } =
-      found1.asInstanceOf[FoundValue[L, found1.Value, R] { type Rest = found1.Rest }]
-  }
-
-  type FoundSup[L, V, R <: Record] = FoundValue[L, _ >: V, R]
-  type FoundSub[L, V, R <: Record] = FoundValue[L, _ <: V, R]
-
-  sealed trait Find[L, R <: Record] { self =>
+  @implicitNotFound("could not extract part of ${R} that does not contain field ${L}")
+  sealed trait Find[L, -V, R <: Record] {
     type Rest >: R <: Record
     implicit def restContainsNot: NotFound[L, Rest]
-    implicit def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): Rest <:< S
-    implicit def restFind[L1](implicit find1: Find[L1, R], notFound: NotFound[L, Field[L1, Any]]): Find[L1, Rest]
-    implicit def restFound[L1](
-        implicit found1: Found[L1, R],
-        notFound: NotFound[L, Field[L1, Any]]): Found[L1, Rest] { type Value = found1.Value }
+    implicit def restContains[S <: Record](implicit sup: R <:< S, absent: Absent[L, S]): Rest <:< S
+    implicit def restFind[L1, V1](implicit distinct: L1 !:= L, find: Find[L1, V1, R]): Find[L1, V1, Rest]
+    implicit def restNotFound[L1](implicit distinct: L1 !:= L, absent: Absent[L1, R]): NotFound[L1, Rest]
+    implicit def restFound[L1, VL, VU >: VL](
+        implicit distinct: L1 !:= L,
+        found: Found[L1, VL, VU, R]): Found[L1, VL, VU, Rest] { type Value = found.Value }
+    implicit def reconstructWitness: Field[L, V] with Rest <:< R
   }
   sealed trait FindLow {
-    implicit def notFoundCase[L, R <: Record](implicit notFound: NotFound[L, R]): Find[L, R] { type Rest = R } =
-      FindSupValue.notFoundCase[L, R]
+    implicit def notFound[L, R <: Record](implicit witness: NotFound[L, R]): Find[L, Any, R] { type Rest = R } = witness
   }
   object Find extends FindLow {
-    final case class NotFoundCase[L, R <: Record](notFound: NotFound[L, R]) extends FindSupValue[L, Any, R] {
-      override type Rest = R
-      override def restContainsNot: NotFound[L, Rest] = notFound
-      override def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): Rest <:< S = implicitly
-      override def reconstructWitness: Field[L, Any] with R <:< R = implicitly
-      override def restFind[L1](implicit find1: Find[L1, R], notFound: NotFound[L, Field[L1, Any]]): Find[L1, Rest] =
-        find1
-      override def restFindSupValue[L1, V1](
-          implicit find1: FindSupValue[L1, V1, R],
-          notFound: NotFound[L, Field[L1, Any]]): FindSupValue[L1, V1, Rest] =
-        find1
-      override def restFound[L1](
-          implicit found1: Found[L1, R],
-          notFound: NotFound[L, Field[L1, Any]]): Found[L1, Rest] {
-        type Value = found1.Value
-      } = found1
-    }
-    final case class FoundCase[L, V, R <: Record](found: FoundValue[L, V, R]) extends FindSupValue[L, V, R] {
-      override type Rest = found.Rest
-      override def restContainsNot: NotFound[L, found.Rest] = found.restContainsNot
-      override def restContains[S >: R <: Record](implicit notFound: NotFound[L, S]): found.Rest <:< S =
-        found.restContains[S](notFound)
-      override def reconstructWitness: Field[L, V] with found.Rest <:< R = found.reconstructRelaxedWitness
-      override def restFind[L1](implicit find1: Find[L1, R], notFound: NotFound[L, Field[L1, Any]]): Find[L1, Rest] =
-        found.restFind[L1]
-      override def restFindSupValue[L1, V1](
-          implicit find1: FindSupValue[L1, V1, R],
-          notFound: NotFound[L, Field[L1, Any]]): FindSupValue[L1, V1, Rest] =
-        found.restFindSupValue[L1, V1]
-      override def restFound[L1](
-          implicit found1: Found[L1, R],
-          notFound: NotFound[L, Field[L1, Any]]): Found[L1, Rest] {
-        type Value = found1.Value
-      } = found.restFound[L1]
-    }
-    implicit def foundCase[L, R <: Record](implicit found: Found[L, R]): Find[L, R] { type Rest = found.Rest } =
-      FindSupValue.foundCase[L, R]
+    implicit def found[L, R <: Record](
+        implicit witness: FoundSome[L, R]): Find[L, witness.Value, R] { type Rest = witness.Rest } = witness.exact
   }
 
-  sealed trait FindSupValue[L, -V, R <: Record] extends Find[L, R] {
-    implicit def reconstructWitness: Field[L, V] with Rest <:< R
-    implicit def restFindSupValue[L1, V1](
-        implicit find1: FindSupValue[L1, V1, R],
-        notFound: NotFound[L, Field[L1, Any]]): FindSupValue[L1, V1, Rest]
-    implicit final def restFoundValue[L1, V1](
-        implicit found1: FoundValue[L1, V1, R],
-        notFound: NotFound[L, Field[L1, Any]]): FoundValue[L1, V1, Rest] =
-      FoundValue.fromFound(restFound[L1])
+  type FindAny[L, R <: Record] = Find[L, Nothing, R]
+
+  @implicitNotFound("could not split ${R} into field ${L} with value >: ${VL} <: ${VU} and the rest")
+  sealed trait Found[L, -VL, +VU >: VL, R <: Record] extends Find[L, VL, R] with Present[L, VU, R] { self =>
+    override type Value >: VL <: VU
+    implicit override def reconstructWitness: Field[L, Value] with Rest =:= R
+    override def exact: Found[L, Value, Value, R] { type Rest = self.Rest }
   }
-  sealed trait FindSupValueLow {
-    private val notFoundCaseSingleton: Find.NotFoundCase[Any, Record] =
-      Find.NotFoundCase(NotFound.unsafeMake[Any, Record])
-    implicit def notFoundCase[L, R <: Record](
-        implicit notFound: NotFound[L, R]): FindSupValue[L, Any, R] { type Rest = R } =
-      notFoundCaseSingleton.asInstanceOf[FindSupValue[L, Any, R] { type Rest = R }]
+  sealed trait FoundLow {
+    implicit def found[L, VL, VU >: VL, R <: Record]: Found[L, VL, VU, R] =
+      macro SagerWhiteBoxMacros.found[L, VL, VU, R]
   }
-  object FindSupValue extends FindSupValueLow {
-    private val foundCaseSingleton: Find.FoundCase[Any, Any, Field[Any, Any]] =
-      Find.FoundCase[Any, Any, Field[Any, Any]](FoundValue.make[Any, Any, Field[Any, Any], Record])
-    implicit def foundCase[L, R <: Record](
-        implicit found: Found[L, R]): FindSupValue[L, found.Value, R] { type Rest = found.Rest } =
-      foundCaseSingleton.asInstanceOf[FindSupValue[L, found.Value, R] { type Rest = found.Rest }]
+  object Found extends FoundLow {
+    private val singleton = new Found[Any, Nothing, Any, Field[Any, Any]] {
+      type Value = Any
+      type Rest = Record
+      implicit override def valueWitness: (Field[Any, Any] <:< Field[Any, Any]) =
+        reconstructWitness
+      implicit override def restContainsNot: NotFound[Any, Record] =
+        implicitly[NotFound[Any, Record]]
+      implicit override def restContains[S <: Record](
+          implicit sup: Field[Any, Any] <:< S,
+          absent: Absent[Any, S]): (Rest <:< S) =
+        sup.asInstanceOf[Rest <:< S]
+      implicit override def restFind[L1, V1](
+          implicit distinct: L1 !:= Any,
+          find: Find[L1, V1, Field[Any, Any]]): Find[L1, V1, Rest] =
+        find.asInstanceOf[Find[L1, V1, Rest]]
+      implicit override def restNotFound[L1](
+          implicit distinct: L1 !:= Any,
+          absent: Absent[L1, Field[Any, Any]]): NotFound[L1, Rest] =
+        absent.asInstanceOf[NotFound[L1, Rest]]
+      implicit override def restFound[L1, VL, VU >: VL](
+          implicit distinct: L1 !:= Any,
+          found: Found[L1, VL, VU, Field[Any, Any]]): Found[L1, VL, VU, Rest] { type Value = found.Value } =
+        asInstanceOf[Found[L1, VL, VU, Rest] { type Value = found.Value }]
+      implicit override def reconstructWitness: Field[Any, Value] with Rest =:= Field[Any, Any] =
+        implicitly[Field[Any, Any] with Record =:= Field[Any, Any]]
+      override def exact: Found[Any, Any, Any, Field[Any, Any]] { type Rest = Record } =
+        asInstanceOf[Found[Any, Any, Any, Field[Any, Any]] { type Rest = Record }]
+      override def toString: String = "Record.Found"
+    }
+    def unsafeMake[L, VL, VU >: VL, V >: VL <: VU, RT <: Record, R <: RT]
+        : Found[L, VL, VU, R] { type Value = V; type Rest = RT } =
+      singleton.asInstanceOf[Found[L, VL, VU, R] { type Value = V; type Rest = RT }]
+    implicit def field[L1, L2, V](
+        implicit distinct: L1 =:= L2): Found[L1, V, V, Field[L2, V]] { type Value = V; type Rest = Record } =
+      unsafeMake[L1, V, V, V, Record, Field[L2, V]]
+    def make[L, VL, VU >: VL, R1 <: Record, R2 <: Record](found: Found[L, VL, VU, R1], absent: Absent[L, R2])
+        : Found[L, VL, VU, R1 with R2] { type Value = found.Value; type Rest = found.Rest with R2 } =
+      unsafeMake[L, VL, VU, found.Value, found.Rest with R2, R1 with R2]
+  }
+
+  type FoundSome[L, R <: Record] = Found[L, Nothing, Any, R]
+  type FoundSup[L, V, R <: Record] = Found[L, V, Any, R]
+  type FoundSub[L, V, R <: Record] = Found[L, Nothing, V, R]
+
+  @implicitNotFound("could not prove that record ${R} does not have field ${L}")
+  sealed trait NotFound[L, R <: Record] extends Find[L, Any, R] with Absent[L, R] {
+    final override type Rest = R
+  }
+  object NotFound {
+    private val singleton = new NotFound[Any, Record] {
+      implicit override def restContainsNot: NotFound[Any, Rest] = this
+      implicit override def restContains[S <: Record](
+          implicit sup: Record <:< S,
+          absent: Absent[Any, S]): Record <:< S = sup
+      implicit override def restFind[L1, V1](
+          implicit distinct: L1 !:= Any,
+          find: Find[L1, V1, Record]): Find[L1, V1, Rest] =
+        find
+      implicit override def restNotFound[L1](
+          implicit distinct: L1 !:= Any,
+          absent: Absent[L1, Record]): NotFound[L1, Rest] =
+        absent.asInstanceOf[NotFound[L1, Rest]]
+      implicit override def restFound[L1, VL, VU >: VL](
+          implicit distinct: L1 !:= Any,
+          found: Found[L1, VL, VU, Record]): Found[L1, VL, VU, Rest] { type Value = found.Value } =
+        found
+      implicit override def reconstructWitness: (Field[Any, Any] with Record <:< Record) =
+        implicitly[Field[Any, Any] with Record <:< Record]
+      implicit override def distinct[L1](implicit present: Select[L1, Record]): Any !:= L1 = !:=.unsafeMake[Any, L1]
+      override def toString: String = "Record.NotFound"
+    }
+    def unsafeMake[L, R <: Record]: NotFound[L, R] = singleton.asInstanceOf[NotFound[L, R]]
+    def empty[L]: NotFound[L, Record] = singleton.asInstanceOf[NotFound[L, Record]]
+    def distinct[L1, L2, V2](implicit witness: L1 !:= L2): NotFound[L1, Field[L2, V2]] =
+      singleton.asInstanceOf[NotFound[L1, Field[L2, V2]]]
+    implicit def absent[L, R <: Record](implicit absent: Absent[L, R]): NotFound[L, R] =
+      absent.asInstanceOf[NotFound[L, R]]
+    def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1], absent2: Absent[L, R2]): NotFound[L, R1 with R2] =
+      unsafeMake[L, R1 with R2]
   }
 
   final class AddSyntax[L, R <: Record](val record: R) extends AnyVal {
-    def apply[V](value: V)(implicit tag: Tag[L], find: Find[L, R]): find.Rest with Field[L, V] =
+    def apply[V](value: V)(implicit tag: Tag[L], find: FindAny[L, R]): find.Rest with Field[L, V] =
       record match {
         case Impl(fields) => Impl(fields + (tag.tag -> value)).asInstanceOf[find.Rest with Field[L, V]]
       }
@@ -221,7 +194,7 @@ object Record {
   }
 
   final class UpdateMonoSyntax[L, R <: Record](val record: R) extends AnyVal {
-    def apply[V](f: V => V)(implicit tag: Tag[L], found: FoundValue[L, V, R]): R = {
+    def apply[V](f: V => V)(implicit tag: Tag[L], found: Found[L, V, V, R]): R = {
       import found.reconstructWitness
       record.update[L](f)
     }
@@ -234,9 +207,9 @@ object Record {
       }
     def map[V1](f: V => V1)(implicit tag: Tag[L], found: FoundSub[L, V, R]): found.Rest with Field[L, V1] =
       record.update[L](f)
-    def mapMono(f: V => V)(implicit tag: Tag[L], found: FoundValue[L, V, R]): R =
+    def mapMono(f: V => V)(implicit tag: Tag[L], found: Found[L, V, V, R]): R =
       record.updateMono[L](f)
-    def remove(implicit tag: Tag[L], find: Find[L, R]): find.Rest =
+    def remove(implicit tag: Tag[L], find: FindAny[L, R]): find.Rest =
       record.remove[L]
   }
 
@@ -246,7 +219,7 @@ object Record {
         case Impl(fields) => fields(tag.tag).asInstanceOf[select.Value]
       }
     def add[L]: AddSyntax[L, R] = new AddSyntax[L, R](record)
-    def remove[L](implicit tag: Tag[L], find: Find[L, R]): find.Rest =
+    def remove[L](implicit tag: Tag[L], find: FindAny[L, R]): find.Rest =
       record match {
         case Impl(fields) => Impl(fields - tag.tag).asInstanceOf[find.Rest]
       }

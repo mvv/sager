@@ -6,10 +6,9 @@ import _root_.zio.internal.Platform
 package object zio {
   type Haz[A] = Field[A, A]
   type Env[A, +B <: A] = Field[A, B]
-  type UsesService[A, R <: Record] = Record.FindSupValue[A, A, R]
-  type UsesServiceEnv[A, -B <: A, R <: Record] = Record.FindSupValue[A, B, R]
-  type FoundService[A, R <: Record] = Record.FoundValue[A, A, R]
-  type FoundSubService[A, R <: Record] = Record.FoundSub[A, A, R]
+  type UsesService[A, R <: Record] = Record.Find[A, A, R]
+  type UsesServiceEnv[A, -B <: A, R <: Record] = Record.Find[A, B, R]
+  type FoundService[A, R <: Record] = Record.FoundSub[A, A, R]
   type SEnv = clock.Clock with console.Console with system.System with random.Random with blocking.Blocking
 
   object SEnv {
@@ -38,23 +37,24 @@ package object zio {
   trait SagerApp extends SagerRuntime {
     def run(args: List[String]): URIO[SEnv, Int]
     final def main(args: Array[String]): Unit =
-      try sys.exit(
-        unsafeRun(
-          (for {
-            fiber <- run(args.toList).fork
-            _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
-              override def run(): Unit =
-                if (_root_.zio.expose.hadFatalError()) {
-                  System.err.println("Fatal error, not interrupting the main Fiber")
-                } else {
-                  val _ = unsafeRunSync(fiber.interrupt)
-                }
-            }))
-            result <- fiber.join
-            _ <- fiber.interrupt
-          } yield result)
+      try
+        sys.exit(
+          unsafeRun(
+            (for {
+              fiber <- run(args.toList).fork
+              _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
+                override def run(): Unit =
+                  if (_root_.zio.expose.hadFatalError()) {
+                    System.err.println("Fatal error, not interrupting the main Fiber")
+                  } else {
+                    val _ = unsafeRunSync(fiber.interrupt)
+                  }
+              }))
+              result <- fiber.join
+              _ <- fiber.interrupt
+            } yield result)
+          )
         )
-      )
       catch { case _: SecurityException => }
   }
 
@@ -166,7 +166,7 @@ package object zio {
   }
 
   implicit class SagerZLayerOutRSyntax[RIn, E, ROut <: Record](val self: ZLayer[RIn, E, ROut]) extends AnyVal {
-    def updateHaz[A: Tag](f: A => A)(implicit found: Record.FoundValue[A, A, ROut]): ZLayer[RIn, E, ROut] =
+    def updateHaz[A: Tag](f: A => A)(implicit found: Record.Found[A, A, A, ROut]): ZLayer[RIn, E, ROut] =
       self >>> ZLayer.fromFunctionMany(_.updateMono(f))
     def updateEnv[A: Tag]: SagerZLayerUpdateEnvSyntax[A, RIn, E, ROut] =
       new SagerZLayerUpdateEnvSyntax[A, RIn, E, ROut](self)

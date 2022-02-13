@@ -9,7 +9,25 @@ trait SagerMacroUtils {
   import c.universe._
 
   protected val baseRecordType = c.typeOf[Record]
-  protected val baseFieldType = c.typeOf[Field[_, Any]]
+  protected val baseFieldType = c.typeOf[Field[Any, Any]]
+
+  protected def createFieldType(labelType: Type, valueType: Type): Type = {
+    val TypeRef(fieldPre, fieldSym, _) = baseFieldType
+    c.internal.typeRef(fieldPre, fieldSym, List(labelType, valueType))
+  }
+
+  protected def withType(acc: Option[Either[Tree, Type]], tpe: Type): Option[Either[Tree, Type]] =
+    acc match {
+      case None                      => Some(Right(tpe))
+      case Some(Right(existingType)) => Some(Left(tq"$existingType with $tpe"))
+      case Some(Left(existingType))  => Some(Left(tq"$existingType with $tpe"))
+    }
+
+  protected def toType(acc: Either[Tree, Type]): Type =
+    acc match {
+      case Right(tpe) => tpe
+      case Left(tree) => c.typecheck(q"((???): $tree)").tpe
+    }
 
   private def flattenRefinedTypes(tpe: c.Type): Seq[Type] =
     tpe match {
@@ -17,47 +35,23 @@ trait SagerMacroUtils {
       case _                       => Seq(tpe)
     }
 
-  protected def deconstructRecordType(recordType: Type): (Map[Type, Type], Type) = {
+  protected def deconstructRecordType(recordType: Type): (Seq[(Type, Type)], Option[Type]) = {
     val (fields, rest) = flattenRefinedTypes(recordType.dealias)
-      .foldLeft((Map.empty[Type, Either[Tree, Type]], Right(baseRecordType): Either[Tree, Type])) {
-        case ((fields, rest), parentType) =>
-          (if (parentType.typeSymbol == baseFieldType.typeSymbol) {
-             parentType.typeArgs match {
-               case List(labelType, valueType) => Some(labelType -> valueType)
-               case _                          => None
-             }
-           } else {
-             None
-           }) match {
-            case Some((labelType, valueType)) =>
-              val updatedType = fields.get(labelType).orElse(fields.find(_._1 =:= labelType).map(_._2)) match {
-                case None                      => Right(valueType)
-                case Some(Right(existingType)) => Left(tq"$existingType with $valueType")
-                case Some(Left(existingTree))  => Left(tq"$existingTree with $valueType")
-              }
-              (fields + (labelType -> updatedType), rest)
-            case None =>
-              val updatedRest = rest match {
-                case Right(existingType) if existingType == baseRecordType =>
-                  Right(parentType)
-                case Right(existingType) =>
-                  Left(tq"$existingType with $parentType")
-                case Left(existingTree) =>
-                  Left(tq"$existingTree with $parentType")
-              }
-              (fields, updatedRest)
-          }
+      .foldLeft((List.empty[(Type, Type)], Option.empty[Either[Tree, Type]])) { case ((fields, rest), parentType) =>
+        (if (parentType.typeSymbol == baseFieldType.typeSymbol) {
+           parentType.typeArgs match {
+             case List(labelType, valueType) => Some(labelType -> valueType)
+             case _                          => None
+           }
+         } else {
+           None
+         }) match {
+          case Some((labelType, valueType)) =>
+            ((labelType -> valueType) :: fields, rest)
+          case None =>
+            (fields, withType(rest, parentType))
+        }
       }
-    (fields.map {
-       case (labelType, Right(valueType)) => (labelType, valueType)
-       case (labelType, Left(valueTree))  => (labelType, c.typecheck(q"((???): $valueTree)").tpe)
-     },
-     rest match {
-       case Right(restType) => restType
-       case Left(restTree)  => c.typecheck(q"((???): $restTree)").tpe
-     })
+    (fields, rest.map(toType))
   }
-
-  protected def isConcreteLabelType(labelType: Type): Boolean =
-    labelType.typeSymbol.isClass && labelType.typeArgs.forall(isConcreteLabelType)
 }

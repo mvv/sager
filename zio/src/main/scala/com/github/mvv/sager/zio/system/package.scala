@@ -1,6 +1,6 @@
 package com.github.mvv.sager.zio
 
-import _root_.zio.{RIO, ULayer, URIO, URLayer, ZIO, ZLayer, system => zioSystem}
+import _root_.zio.{system => zioSystem, RIO, ULayer, URIO, URLayer, ZIO, ZLayer}
 
 package object system {
   type System = Haz[zioSystem.System.Service]
