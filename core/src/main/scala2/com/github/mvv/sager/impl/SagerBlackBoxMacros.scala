@@ -11,7 +11,6 @@ class SagerBlackBoxMacros(val c: blackbox.Context) extends SagerMacroUtils {
   def notFound[L: WeakTypeTag, R <: Record: WeakTypeTag]: Tree = {
     val labelType = weakTypeTag[L].tpe
     val recordType = weakTypeTag[R].tpe
-    System.err.println(s"NOT_FOUND $labelType $recordType")
 
     val (fields, rest) = deconstructRecordType(recordType)
     val (diffType, unknownType) =

@@ -41,11 +41,14 @@ inThisBuild(
   )
 )
 
-def isScala2(version: String): Boolean =
+def scalaVersionMajor(version: String): Int =
   CrossVersion.partialVersion(version) match {
-    case Some((2, _)) => true
-    case _            => false
+    case Some((2, _)) => 2
+    case _            => 3
   }
+
+def isScala2(version: String): Boolean =
+  scalaVersionMajor(version) == 2
 
 inThisBuild(
   Seq(
@@ -75,18 +78,12 @@ lazy val core = (project in file("core"))
     name := "sager",
     description := "Generic records for Scala",
     Compile / scalaSource := {
-      if (isScala2(scalaVersion.value)) {
-        (Compile / scalaSource).value
-      } else {
-        baseDirectory.value / "src" / "main" / "scala3"
-      }
+      val major = scalaVersionMajor(scalaVersion.value)
+      baseDirectory.value / "src" / "main" / s"scala$major"
     },
     Test / scalaSource := {
-      if (isScala2(scalaVersion.value)) {
-        (Test / scalaSource).value
-      } else {
-        baseDirectory.value / "src" / "test" / "scala3"
-      }
+      val major = scalaVersionMajor(scalaVersion.value)
+      baseDirectory.value / "src" / "test" / s"scala$major"
     },
     scalacOptions ++= {
       if (isScala2(scalaVersion.value)) {
