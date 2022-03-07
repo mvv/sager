@@ -25,7 +25,10 @@ object Field {
 }
 
 object Record {
-  final private case class Impl(fields: Map[LightTypeTag, Any]) extends Field[Any, Any]
+  final private case class Impl(fields: Map[LightTypeTag, Any]) extends Field[Any, Any] {
+    override def toString: String =
+      fields.iterator.map { case (key, value) => s"$key -> $value" }.mkString("Record(", ", ", ")")
+  }
 
   @implicitNotFound("could not prove that record ${R} has field ${L}")
   sealed trait Present[L, +V, -R <: Record] {

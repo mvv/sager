@@ -21,7 +21,10 @@ object Field:
   def apply[L]: Make[L] = ()
 
 object Record:
-  final private case class Impl(fields: Map[LightTypeTag, Any]) extends Field[Any, Any]
+  final private case class Impl(fields: Map[LightTypeTag, Any]) extends Field[Any, Any] {
+    override def toString: String =
+      fields.iterator.map((key, value) => s"$key -> $value").mkString("Record(", ", ", ")")
+  }
 
   @implicitNotFound("could not prove that record ${R} has field ${L}")
   sealed trait Present[L, +V, -R <: Record]:
@@ -49,7 +52,7 @@ object Record:
   object Absent extends AbsentLow:
     inline given empty[L]: Absent[L, Record] = NotFound.empty[L]
     inline def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1],
-                                                   absent2: Absent[L, R2]): Absent[L, R1 with R2] =
+                                                   absent2: Absent[L, R2]): Absent[L, R1 & R2] =
       NotFound.make[L, R1, R2](absent1, absent2)
 
   @implicitNotFound("could not extract part of ${R} that does not contain field ${L}")
@@ -68,6 +71,8 @@ object Record:
   object Find extends FindLow:
     inline given found[L, R <: Record](
         using witness: FoundSome[L, R]): (Find[L, witness.Value, R] { type Rest = witness.Rest }) = witness.exact
+
+  type FindAny[L, R <: Record] = Find[L, Nothing, R]
 
   @implicitNotFound("could not split ${R} into field ${L} with value >: ${VL} <: ${VU} and the rest")
   sealed trait Found[L, -VL, +VU, R <: Record] extends Find[L, VL, R] with Present[L, VU, R]:
@@ -154,36 +159,54 @@ object Record:
       singleton.asInstanceOf[NotFound[L1, Field[L2, V2]]]
     inline given absent[L, R <: Record](using absent: Absent[L, R]): NotFound[L, R] =
       absent.asInstanceOf[NotFound[L, R]]
-    def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1], absent2: Absent[L, R2]): NotFound[L, R1 with R2] =
-      unsafeMake[L, R1 with R2]
+    def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1], absent2: Absent[L, R2]): NotFound[L, R1 & R2] =
+      unsafeMake[L, R1 & R2]
 
   extension [R <: Record](record: R)
     def get[L](using tag: Tag[L], present: Select[L, R]): present.Value =
       record match
         case Impl(fields) => fields(tag.tag).asInstanceOf[present.Value]
     def add[L]: AddSyntax[L, R] = new AddSyntax[L, R](record)
-    def remove[L](using tag: Tag[L], find: Find[L, Nothing, R]): find.Rest =
+    def remove[L](using tag: Tag[L], find: FindAny[L, R]): find.Rest =
       record match
-        case Impl(fields) => Impl(fields - tag.tag).asInstanceOf[find.Rest]
+        case Impl(fields) => Impl(fields.removed(tag.tag)).asInstanceOf[find.Rest]
     def update[L](using found: FoundSome[L, R]): UpdateSyntax[L, found.Value, found.Rest, R] =
       new UpdateSyntax[L, found.Value, found.Rest, R](record)
     def updateMono[L](using found: FoundSome[L, R]): UpdateMonoSyntax[L, found.Value, R] =
       new UpdateMonoSyntax[L, found.Value, R](record)
+    def field[L](using present: Select[L, R]): FieldSyntax[L, present.Value, R] =
+      new FieldSyntax[L, present.Value, R](record)
 
   final class AddSyntax[L, R <: Record](val record: R) extends AnyVal:
-    def apply[V](value: V)(using tag: Tag[L], find: Find[L, Nothing, R]): Field[L, V] with find.Rest =
+    def apply[V](value: V)(using tag: Tag[L], find: Find[L, Nothing, R]): Field[L, V] & find.Rest =
       record match
-        case Impl(fields) => Impl(fields + (tag.tag -> value)).asInstanceOf[Field[L, V] with find.Rest]
+        case Impl(fields) => Impl(fields.updated(tag.tag, value)).asInstanceOf[Field[L, V] & find.Rest]
 
   final class UpdateSyntax[L, V, Rest <: Record, R <: Record](val record: R) extends AnyVal:
-    def apply[V1](f: V => V1)(using tag: Tag[L]): Field[L, V1] with Rest =
+    def apply[V1](f: V => V1)(using tag: Tag[L]): Field[L, V1] & Rest =
       record match
         case Impl(fields) =>
-          Impl(fields.updated(tag.tag, (v: Any) => f(v.asInstanceOf[V]))).asInstanceOf[Field[L, V1] with Rest]
+          val key = tag.tag
+          val value = fields(key).asInstanceOf[V]
+          Impl(fields.updated(key, f(value))).asInstanceOf[Field[L, V1] & Rest]
 
   final class UpdateMonoSyntax[L, V, R <: Record](val record: R) extends AnyVal:
     def apply(f: V => V)(using tag: Tag[L]): R =
       record match
-        case Impl(fields) => Impl(fields.updated(tag.tag, (v: Any) => f(v.asInstanceOf[V]))).asInstanceOf[R]
+        case Impl(fields) =>
+          val key = tag.tag
+          val value = fields(key).asInstanceOf[V]
+          Impl(fields.updated(key, f(value))).asInstanceOf[R]
+
+  final class FieldSyntax[L, V, R <: Record](val record: R) extends AnyVal:
+    def value(using tag: Tag[L]): V =
+      record match
+        case Impl(fields) => fields(tag.tag).asInstanceOf[V]
+    def remove(using tag: Tag[L], find: FindAny[L, R]): find.Rest =
+      record.remove[L]
+    def map[V1](f: V => V1)(using tag: Tag[L], found: FoundSub[L, V, R]): Field[L, V1] & found.Rest =
+      record.update[L](f)
+    def mapMono(f: V => V)(using tag: Tag[L], found: Found[L, V, V, R]): R =
+      record.updateMono[L](f)
 
   val empty: Record = Impl(Map.empty)

@@ -5,7 +5,7 @@ import com.github.mvv.sager.Record.{Absent, Found, FoundSome}
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers.*
 
-class FoundSpec extends AnyFunSpec {
+class FoundSpec extends AnyFunSpec:
   describe("Found") {
     it("derive for fields") {
       """
@@ -33,4 +33,3 @@ class FoundSpec extends AnyFunSpec {
       """ must compile
     }
   }
-}

@@ -16,7 +16,7 @@ where `Field` is invariant in its first argument and covariant in the second.
 Add Sager to your dependencies
 
 ```scala
-libraryDependencies += "com.github.mvv.sager" %% "sager" % "0.1-M13"
+libraryDependencies += "com.github.mvv.sager" %% "sager" % "0.2-SNAPSHOT"
 ```
 
 To construct a record, use
@@ -58,3 +58,5 @@ val r1 = r.remove[Bar]
 ## Submodules
 
 * `sager-zio` contains helpers for using records as [ZIO](https://github.com/zio/zio) environments
+* `sager-zio-interop-cats` extends ZIO Cats-Effect [interop](https://github.com/zio/interop-cats) with `sager-zio`
+   support
