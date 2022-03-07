@@ -16,7 +16,7 @@ where `Field` is invariant in its first argument and covariant in the second.
 Add Sager to your dependencies
 
 ```scala
-libraryDependencies += "com.github.mvv.sager" %% "sager" % "0.2-SNAPSHOT"
+libraryDependencies += "com.github.mvv.sager" %% "sager" % "0.2-M1"
 ```
 
 To construct a record, use
