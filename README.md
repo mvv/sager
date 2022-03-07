@@ -46,7 +46,7 @@ val bar = r.get[Bar]
 // val bar: Int = 123
 val newBar = r.add[Bar](false).get[Bar]
 // val newBar: Boolean = false
-// You can omit `: Int` annotation in Scala 3
+// You can omit the `: Int` annotation in Scala 3
 val updatedBar = r.update[Bar]((_: Int) > 100).get[Bar]
 // val updatedBar: Boolean = true
 // Same thing, but more inference-friendly

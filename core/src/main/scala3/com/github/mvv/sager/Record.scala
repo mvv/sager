@@ -51,8 +51,7 @@ object Record:
     inline given distinct[L1, L2, V2](using L1 !:= L2): Absent[L1, Field[L2, V2]] = NotFound.distinct[L1, L2, V2]
   object Absent extends AbsentLow:
     inline given empty[L]: Absent[L, Record] = NotFound.empty[L]
-    inline def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1],
-                                                   absent2: Absent[L, R2]): Absent[L, R1 & R2] =
+    inline def make[L, R1 <: Record, R2 <: Record](absent1: Absent[L, R1], absent2: Absent[L, R2]): Absent[L, R1 & R2] =
       NotFound.make[L, R1, R2](absent1, absent2)
 
   @implicitNotFound("could not extract part of ${R} that does not contain field ${L}")
